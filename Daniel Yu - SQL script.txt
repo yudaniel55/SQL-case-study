@@ -1,0 +1,64 @@
+/* I. Exploring the Database */
+SELECT COUNT(id) FROM people_person;
+SELECT COUNT(id) FROM people_person WHERE date_joined < '2017-01-12';
+SELECT COUNT(DISTINCT pet.owner_id), COUNT(DISTINCT person.id), ROUND(CAST(COUNT(DISTINCT pet.owner_id) as float) / cast(COUNT(DISTINCT person.id)as float),4) 
+    FROM  people_person person LEFT JOIN pets_pet pet ON pet.owner_id = person.id;
+SELECT COUNT(pet.id), COUNT(DISTINCT person.id), ROUND(CAST(COUNT(pet.id) as float) / cast(COUNT(DISTINCT person.id)as float),3) 
+    FROM  pets_pet pet LEFT JOIN people_person person ON pet.owner_id = person.id;
+SELECT COUNT(id), SUM(plays_cats), ROUND(CAST(SUM(plays_cats)AS FLOAT) / CAST(COUNT(id) AS FLOAT),4) FROM  pets_pet;
+
+/* II. Conversations and Bookings */
+SELECT DISTINCT service_type FROM services_service;
+SELECT service_type, ROUND(AVG(price),2) FROM services_service GROUP BY service_type;
+SELECT service.service_type, COUNT(convo.booked_at), COUNT(convo.id), ROUND(CAST(COUNT(convo.booked_at) AS FLOAT) / CAST(COUNT(convo.id) AS FLOAT),4) 
+    FROM conversations_conversation convo JOIN services_service service ON convo.service_id = service.id 
+    GROUP BY service.service_type;
+SELECT service.service_type, COUNT(convo.cancelled_at), COUNT(convo.booked_at), ROUND(CAST(COUNT(convo.cancelled_at) as float) / CAST(COUNT(convo.booked_at) AS FLOAT),4) 
+    FROM conversations_conversation convo JOIN services_service service ON convo.service_id = service.id 
+    GROUP BY service.service_type;
+SELECT review.id, review.stars, convo.requester_id, service.provider_id, review.reviewer_id 
+    FROM conversations_review review 
+    JOIN conversations_conversation convo ON review.conversation_id = convo.id 
+    JOIN services_service service ON convo.service_id = service.id;
+
+/* III. Recent Daily Booking Rate */
+SELECT DATE(convo.added) AS 'date', ROUND(CAST(COUNT(convo.booked_at) AS FLOAT) / CAST(COUNT(convo.id) AS FLOAT),4) 
+    FROM conversations_conversation convo WHERE "date" > DATE((JULIANDAY('2017-07-11')-90)) 
+    GROUP BY "date" ORDER BY "date";
+SELECT AVG(JULIANDAY(booked_at) - JULIANDAY(added)) as "avg time from convo start to booking" 
+    FROM conversations_conversation WHERE booked_at IS NOT NULL;
+
+/* IV. Analyzing Take Rate */
+SELECT strftime('%Y-%m', convo.booked_at) AS 'booking date', ROUND(SUM(ROUND(convo.booking_total * (1 + person.fee), 2)),2) AS 'gross billings', ROUND(SUM(ROUND(convo.booking_total * (service.fee + person.fee),2)),2) AS 'net revenue', 
+    ROUND(SUM(ROUND(convo.booking_total * (service.fee + person.fee),2)) /      
+    SUM(ROUND(convo.booking_total * (1 + person.fee), 2)),2) AS 'take rate' 
+    FROM conversations_conversation convo JOIN services_service service ON convo.service_id = service.id 
+    JOIN people_person person ON convo.requester_id = person.id 
+    WHERE "booking date" IS NOT NULL 
+    GROUP BY "booking date" ORDER BY "booking date";
+/* Validation check below */
+SELECT SUM(ROUND(convo.booking_total * (1 + person.fee),2))AS 'gross billings', SUM(ROUND(convo.booking_total * (service.fee + person.fee),2)) AS 'net revenue' 
+    FROM conversations_conversation convo JOIN services_service service ON convo.service_id = service.id 
+    JOIN people_person person ON convo.requester_id = person.id 
+    WHERE strftime('%Y-%m', convo.booked_at) iS NOT NULL;
+/* Validation check END */
+SELECT strftime('%Y-%m', person.date_joined) AS 'date', ROUND(AVG(person.fee),2) AS 'avg owner fee', ROUND(AVG(service.fee),2) AS 'avg service fee' 
+    FROM conversations_conversation convo JOIN services_service service ON convo.service_id = service.id 
+    JOIN people_person person ON convo.requester_id = person.id 
+    GROUP BY "date" ORDER BY "date";
+
+/* V. New Conversation Flow */
+SELECT COUNT(convo.booked_at), COUNT(convo.id), 
+    ROUND(CAST(COUNT(convo.booked_at) AS FLOAT) / CAST(COUNT(convo.id) AS FLOAT),4) 
+    FROM people_testsegmentation test JOIN people_person person ON test.person_id = person.id 
+    JOIN conversations_conversation convo ON convo.requester_id = person.id 
+    JOIN services_service service ON convo.service_id = service.id 
+    WHERE test_name = 'New Conversation Flow' AND DATE(convo.added) >= '2017-03-13' AND test.test_group = 
+'variant';
+SELECT COUNT(convo.booked_at), COUNT(convo.id),
+    ROUND(CAST(COUNT(convo.booked_at) AS FLAOT) / CAST(COUNT(convo.id) AS FLOAT),4) 
+    FROM people_testsegmentation test JOIN people_person person ON test.person_id = person.id 
+    JOIN conversations_conversation convo ON convo.requester_id = person.id 
+    JOIN services_service service ON convo.service_id = service.id 
+    WHERE test_name = 'New Conversation Flow' AND DATE(convo.added) >= '2017-03-13' AND test.test_group =
+'holdout';
